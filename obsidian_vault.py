@@ -29,6 +29,9 @@ class ObsidianVault:
         self._pages = []
         self._split_pages = []
 
+    def get_vector_store(self):
+        return self._vector_store
+
     def _init_model(self):
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 
@@ -58,7 +61,6 @@ class ObsidianVault:
         self.parse_vault()
         self.text_splitter(self._pages)
         self.add_pages_to_vector_store(self._split_pages)
-
 
 
 
