@@ -3,26 +3,48 @@ import fitz  # PyMuPDF
 import pytesseract
 from langchain_community.document_loaders import DirectoryLoader
 from langchain.schema import Document
-import tempfile
+from env import GEMINI_API_KEY
+from google import genai
+from google.genai import types
+
+OCR_PROMPT = ("Act like a text scanner. Extract text as it is without analyzing it and without summarizing it. "
+              "Treat all images as a whole document and analyze them accordingly. Think of it as a document with "
+              "multiple pages, each image being a page. Understand page-to-page flow logically and semantically.")
+GEMINI_MODEL = 'gemini-2.0-flash-001'
 
 
 class ObsidianProcessor:
     def __init__(self, vault_path):
-        self.vault_path = vault_path
+        self._vault_path = vault_path
+        self._loader = DirectoryLoader(vault_path)  # From LangChain
+        # Prep Gemini for OCR
+        self._gemini = genai.Client(api_key=GEMINI_API_KEY)
 
     def process_vault(self):
         # Process Markdown
-        # md_loader = DirectoryLoader(self.vault_path, glob="**/*.md")
-        # md_docs = md_loader.load()
+
+       self._loader.load()  # Provides a list of documents
 
         # Process PDFs with hybrid text/OCR extraction
-        pdf_docs = self.process_pdfs()
-        print(pdf_docs)
+        # pdf_docs = self.process_pdfs()
+        # print(pdf_docs)
 
         # Process Images (standalone images)
         # img_docs = self.process_images()
 
         # return md_docs + pdf_docs + img_docs
+        pass
+
+    def ocr_pdf(self, file) -> str:
+        # Render page as high-res image
+        file = self._gemini.files.upload(file=file)
+        response = self._gemini.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[OCR_PROMPT, file]
+        )
+
+        return response.text  # String containing the OCR result
+
 
     def process_pdfs(self):
         pdf_docs = []
@@ -57,21 +79,6 @@ class ObsidianProcessor:
             text += self.ocr_page(page)
 
         return text
-
-    def ocr_page(self, page, dpi=300):
-        # Render page as high-res image
-        pix = page.get_pixmap(dpi=dpi)
-        temp_dir = tempfile.gettempdir()
-        image_path = os.path.join(temp_dir, f"temp_page_{page.number}.png")
-
-        try:
-            pix.save(image_path)
-            ocr_text = pytesseract.image_to_string(image_path)
-            os.remove(image_path)
-            return f"\n[OCR Result]\n{ocr_text}"
-        except Exception as e:
-            print(f"OCR failed: {str(e)}")
-            return ""
 
     def process_images(self):
         img_docs = []
