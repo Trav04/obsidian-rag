@@ -7,6 +7,8 @@ from env import GEMINI_API_KEY
 from google import genai
 from google.genai import types
 
+from customer_loader import GeminiLoader
+
 OCR_PROMPT = ("Act like a text scanner. Extract text as it is without analyzing it and without summarizing it. "
               "Treat all images as a whole document and analyze them accordingly. Think of it as a document with "
               "multiple pages, each image being a page. Understand page-to-page flow logically and semantically.")
@@ -16,26 +18,34 @@ GEMINI_MODEL = 'gemini-2.0-flash-001'
 class ObsidianProcessor:
     def __init__(self, vault_path):
         self._vault_path = vault_path
-        self._loader = DirectoryLoader(vault_path)  # From LangChain
+
+        # Directory loader for markdown files only
+        self._loader = DirectoryLoader(vault_path, glob="**/*.md")
         # Prep Gemini for OCR
         self._gemini = genai.Client(api_key=GEMINI_API_KEY)
 
+
     def process_vault(self):
         # Process Markdown
+        # pages = []
+        #
+        # # Process markdown pages into langchain document objects
+        # self._loader.glob = "**/*.md"  # Set md files only
+        # mark_down = self._loader.load()
+        # pages.extend(mark_down)  # Add langchan document lsit to pages lits
+        #
+        # print(pages)
+        loader = GeminiLoader(self._vault_path, GEMINI_API_KEY, GEMINI_MODEL)
+        print(loader.load())
 
-       self._loader.load()  # Provides a list of documents
 
-        # Process PDFs with hybrid text/OCR extraction
-        # pdf_docs = self.process_pdfs()
-        # print(pdf_docs)
-
-        # Process Images (standalone images)
-        # img_docs = self.process_images()
-
-        # return md_docs + pdf_docs + img_docs
-        pass
-
-    def ocr_pdf(self, file) -> str:
+    def ocr_pdf(self, file, source) -> Document:
+        """
+        OCRs a pdf curates a LangChain Document object
+        :param file: the pdf to be OCR'ed
+        :param source: the pdf file path
+        :return: Document - a LangChain document object
+        """
         # Render page as high-res image
         file = self._gemini.files.upload(file=file)
         response = self._gemini.models.generate_content(
@@ -43,12 +53,16 @@ class ObsidianProcessor:
             contents=[OCR_PROMPT, file]
         )
 
-        return response.text  # String containing the OCR result
+        doc = Document(
+            page_content=response.text,
+            metadata={"source": source}
+        )
+        return doc  # String containing the OCR result
 
 
     def process_pdfs(self):
         pdf_docs = []
-        for root, _, files in os.walk(self.vault_path):
+        for root, _, files in os.walk(self._vault_path):
             for file in files:
                 if file.lower().endswith(".pdf"):
                     pdf_path = os.path.join(root, file)
@@ -82,7 +96,7 @@ class ObsidianProcessor:
 
     def process_images(self):
         img_docs = []
-        for root, _, files in os.walk(self.vault_path):
+        for root, _, files in os.walk(self._vault_path):
             for file in files:
                 if file.lower().endswith((".png", ".jpg", ".jpeg")):
                     img_path = os.path.join(root, file)
