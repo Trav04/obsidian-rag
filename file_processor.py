@@ -4,8 +4,8 @@ from env import GEMINI_API_KEY
 from google import genai
 from google.genai import types
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-import chromadb
-
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
 from custom_loader import GeminiLoader
 
 OCR_PROMPT = ("Act like a text scanner. Extract text as it is without analyzing it and without summarizing it. "
@@ -14,17 +14,30 @@ OCR_PROMPT = ("Act like a text scanner. Extract text as it is without analyzing 
 GEMINI_MODEL = 'gemini-2.0-flash-001'
 
 
-class ObsidianProcessor:
+class ObsidianVault:
     def __init__(self, vault_path):
+        # Obsidian vault directory
         self._vault_path = vault_path
-
         # Directory loader for markdown files only
         self._loader = GeminiLoader(self._vault_path, GEMINI_API_KEY, GEMINI_MODEL)
         # Prep Gemini for OCR
         self._gemini = genai.Client(api_key=GEMINI_API_KEY)
 
+        self._vector_store = None
+        self._init_model()
+
         self._pages = []
         self._split_pages = []
+
+    def _init_model(self):
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+
+        self._vector_store = Chroma(
+            collection_name="example_collection",
+            embedding_function=embeddings,
+            persist_directory="./chroma_langchain_db",  # Where to save data locally, remove if not necessary
+        )
+
 
     def text_splitter(self, pages) -> None:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -38,9 +51,14 @@ class ObsidianProcessor:
     def parse_vault(self):
         self._pages = self._loader.load()
 
+    def add_pages_to_vector_store(self, split_pages):
+        self._vector_store.add_documents(documents=split_pages)
+
     def process_vault(self) -> None:
         self.parse_vault()
         self.text_splitter(self._pages)
+        self.add_pages_to_vector_store(self._split_pages)
+
 
 
 
