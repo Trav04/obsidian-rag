@@ -29,10 +29,11 @@ class GeminiLoader(BaseLoader):
     """A custom document loader that uses Gemini to OCR PDFs and images """
 
     def __init__(self, file_path: str, api_key: str, model: str) -> None:
-        """Initialize the loader with a file path.
-
-        Args:
-            file_path: The path to the file to load.
+        """
+        Initialises the file path and setups the the Gemini model
+        :param file_path: the path to the directory
+        :param api_key: Gemini api key
+        :param model: Gemini model to be used for parsing
         """
         self.file_path = file_path
         self.api_key = api_key
@@ -41,6 +42,12 @@ class GeminiLoader(BaseLoader):
         self._gemini = genai.Client(api_key=api_key)
 
     def _parse_object(self, source) -> str:
+        """
+        Parses a file object by uploading it to Gemini and returning
+        extracted text
+        :param source: the file path
+        :return: the extracted text
+        """
         file = self._gemini.files.upload(file=source)
         response = self._gemini.models.generate_content(
             model=self.model,
